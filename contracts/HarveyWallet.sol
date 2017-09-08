@@ -5,11 +5,34 @@ import './HarveyCustodian.sol';
 
 contract HarveyWallet {
 
+  /**
+   * @dev owner of the wallet
+   */
   mapping(address => bool) public owner;
+
+  /**
+   * @dev custodian the wallet is subject to
+   */
   address public custodian;
+
+  /**
+   * @dev last timestamp a catchup was performed
+   */
   uint256 public lastCatchup;
+
+  /**
+   * @dev timestamp that the wallet minted coins by making a donation
+   */
   uint256 public mintStart;
+
+  /**
+   * @dev amount minted
+   */
   uint256 public minted;
+
+  /**
+   * @dev amount redeemed
+   */
   uint256 public redeemed;
 
 
@@ -21,50 +44,62 @@ contract HarveyWallet {
     _;
   }
 
-  /**
-   * @dev Throws if called by any account other than the owner.
-   */
-  modifier onlyCustodian() {
-    assert(msg.sender == custodian);
-    _;
-  }
-
 
   /**
-   * @dev Throws if called by any account other than the owner.
+   * @dev Throws if the account hasn't minted coins
    */
   modifier onlyMinted() {
     assert(minted > 0);
     _;
   }
 
+  /**
+   * @dev lets the contract recieve ether
+   */
   function () payable{
 
   }
 
+  /**
+   * @dev Creates a new wallet
+   * @param _custodian - the custodian that this wallet subscribes to
+   */
   function HarveyWallet(address _custodian) {
+    assert(_custodian != 0);
     //the owner will start as the address creating the contract
     owner[msg.sender] = true;
     custodian = _custodian;
     lastCatchup = now;
   }
 
+  /**
+   * @dev sets the value of an owner
+   * @param _newOwner - the address of a potential owner
+   * @param _isOwner - the value of ownership
+   */
   function setOwner(address _newOwner, bool _isOwner) onlyOwner returns (bool){
       owner[_newOwner] = _isOwner;
   }
 
-
+  /**
+   * @dev sets the value of an owner
+   * @param _payTo - the address of the person you want to pay
+   * @param _amount - the amount to pay
+   */
   function pay(address _payTo, uint _amount) onlyOwner returns(bool){
       assert(HarveyCustodian(custodian).validWallets(_payTo) == true);
-      uint thisAmount = _amount;
+      //uint thisAmount = _amount;
       catchup();
       HarveyWallet(_payTo).catchup();
-      uint remainingBalance = address(this).balance;
+      //uint remainingBalance = address(this).balance;
       assert(address(this).balance > _amount);
       _payTo.transfer(_amount);
       Transfer(_payTo, _amount);
   }
 
+  /**
+   * @dev calculates the amount of a catchup
+   */
   function calcCatchup() constant returns (uint){
       uint currentBalance = address(this).balance;
       uint periodLength = (now - lastCatchup);
@@ -73,6 +108,9 @@ contract HarveyWallet {
       return owed;
   }
 
+  /**
+   * @dev catches up the wallet so that it is current and can transact
+   */
   function catchup(){
     assert(lastCatchup < now);
     uint amount = calcCatchup();
@@ -81,6 +119,9 @@ contract HarveyWallet {
     Catchup(amount);
   }
 
+  /**
+   * @dev mints new coins and transfers the donation to the custodian
+   */
   function mint() payable returns (bool){
     assert(minted == 0);
     assert(mintStart == 0);
@@ -91,6 +132,10 @@ contract HarveyWallet {
     return true;
   }
 
+  /**
+   * @dev removes coins from the system and returns ether back to the minter
+   * @param _amount - the amount to pull back
+   */
   function unMint(uint256 _amount) returns (bool){
     uint available = HarveyCustodian(custodian).availableToRedeem(minted, redeemed, mintStart);
     assert(available > 0);
